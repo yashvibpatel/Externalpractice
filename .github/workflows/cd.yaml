@@ -22,9 +22,29 @@ jobs:
             IMAGE=${{ secrets.DOCKER_USERNAME }}/myapp
             TAG=${{ github.event.workflow_run.head_sha }}
 
+            # Install Docker (Ubuntu 24.04 / noble)
             sudo apt-get update -y
-            sudo apt-get install -y docker.io
+            sudo apt-get install -y ca-certificates curl gnupg
 
-            sudo docker rm -f myapp || true
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker.gpg
+
+            echo \
+              "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+              noble stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+            sudo apt-get update -y
+            sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+            # Stop anything using port 8080
+            PORT=8080
+            if sudo lsof -i:$PORT -t >/dev/null ; then
+              sudo kill -9 $(sudo lsof -i:$PORT -t)
+            fi
+
+            # Stop old container
+            sudo docker stop myapp || true
+            sudo docker rm myapp || true
+
+            # Pull and run new image
             sudo docker pull $IMAGE:$TAG
             sudo docker run -d --name myapp -p 8080:80 $IMAGE:$TAG
